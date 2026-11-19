@@ -186,19 +186,36 @@ const sPerson = setupDrop($("drop-s-person"));
   openBtn.addEventListener("click", async () => {
     if (!navigator.mediaDevices?.getUserMedia)
       return alert("Camera isn't available here. It needs https:// or localhost; you can still upload a photo.");
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1080 }, height: { ideal: 1440 } }, audio: false });
-    } catch { return alert("Couldn't access the camera. Please allow camera permission, or upload a photo instead."); }
+    let facing = "user";   // "user" = front camera, "environment" = back camera
+    const getStream = f => navigator.mediaDevices.getUserMedia(
+      { video: { facingMode: { ideal: f }, width: { ideal: 1080 }, height: { ideal: 1440 } }, audio: false });
+    try { stream = await getStream(facing); }
+    catch { return alert("Couldn't access the camera. Please allow camera permission, or upload a photo instead."); }
     modal = document.createElement("div");
     modal.className = "cam-modal";
     modal.innerHTML = '<p>Stand back so your upper body (or full body) is visible, arms relaxed at your sides.</p>' +
       '<video autoplay playsinline muted aria-label="Camera preview"></video>' +
       '<div class="cam-actions"><button type="button" class="primary" id="cam-snap">Capture</button>' +
+      '<button type="button" class="secondary" id="cam-flip" hidden>🔄 Flip</button>' +
       '<button type="button" class="secondary" id="cam-cancel">Cancel</button></div>';
     document.body.appendChild(modal);
     const video = modal.querySelector("video");
     video.srcObject = stream;
     modal.querySelector("#cam-cancel").onclick = stop;
+    // Flip button only when the device has more than one camera (phones); front camera is shown mirrored like a selfie
+    const flipBtn = modal.querySelector("#cam-flip");
+    navigator.mediaDevices.enumerateDevices().then(d => {
+      if (d.filter(x => x.kind === "videoinput").length > 1) flipBtn.hidden = false;
+    }).catch(() => {});
+    flipBtn.onclick = async () => {
+      const next = facing === "user" ? "environment" : "user";
+      try {
+        const s = await getStream(next);
+        stream.getTracks().forEach(t => t.stop());
+        stream = s; facing = next; video.srcObject = s;
+        video.style.transform = facing === "user" ? "scaleX(-1)" : "none";
+      } catch { alert("Couldn't switch the camera."); }
+    };
     modal.querySelector("#cam-snap").onclick = () => {
       if (!video.videoWidth) return;
       const c = document.createElement("canvas");
