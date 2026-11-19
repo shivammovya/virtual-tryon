@@ -32,6 +32,13 @@ async def bad_input_handler(request: Request, exc: BadInput):
     return JSONResponse({"success": False, "error": str(exc)}, status_code=400)
 
 
+@app.get("/api/storage-mode")
+def storage_mode():
+    """Shows which storage the running app uses (never the keys). Handy to debug deployments."""
+    return {"storage": "supabase" if config.USE_SUPABASE else "local",
+            "supabase_url_set": bool(config.SUPABASE_URL), "supabase_key_set": bool(config.SUPABASE_KEY)}
+
+
 @app.get("/")
 def customer_app():
     return FileResponse(config.FRONTEND_DIR / "index.html")
