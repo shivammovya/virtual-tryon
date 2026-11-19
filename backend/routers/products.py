@@ -4,9 +4,9 @@ import io
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 
-from .. import config, db
+from .. import db, storage
 from ..auth import require_admin
-from ..images import BadInput, MAX_BYTES, read_image, remove_background, save_jpg
+from ..images import BadInput, MAX_BYTES, read_image, remove_background
 
 router = APIRouter(prefix="/api/products")
 
@@ -31,11 +31,11 @@ def store_image(data: bytes, remove_bg: bool) -> tuple[str, bool]:
     removed = False
     if remove_bg:
         img, removed = remove_background(img)
-    return save_jpg(img, config.PRODUCTS_DIR).name, removed
+    return storage.save_product_image(img), removed
 
 
 def delete_image_file(filename: str) -> None:
-    (config.PRODUCTS_DIR / filename).unlink(missing_ok=True)
+    storage.delete_product_image(filename)
 
 
 @router.get("")

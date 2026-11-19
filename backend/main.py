@@ -18,7 +18,8 @@ app = FastAPI(title="Virtual Try-On")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 app.mount("/outputs", StaticFiles(directory=config.OUTPUTS_DIR), name="outputs")
-app.mount("/product-images", StaticFiles(directory=config.PRODUCTS_DIR), name="product-images")
+if not config.USE_SUPABASE:   # with Supabase, images are served from its public bucket
+    app.mount("/product-images", StaticFiles(directory=config.PRODUCTS_DIR), name="product-images")
 app.mount("/static", StaticFiles(directory=config.FRONTEND_DIR / "static"), name="static")
 
 app.include_router(tryon.router)

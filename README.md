@@ -79,6 +79,12 @@ Secrets live only on the server in `.env` — the frontend never sees them.
 The upload box has a **Take a photo with camera** button (front camera, via `getUserMedia`). The captured JPEG goes into the same file input as a normal upload, so all validation and the try-on flow are identical.
 Browsers only allow camera access on **HTTPS or `http://localhost`** — over a plain `http://<LAN-IP>` address (e.g. a phone on your Wi-Fi) the button shows a "camera isn't available" message; use HTTPS (deploy, or a tunnel such as ngrok / Cloudflare Tunnel).
 
+## Supabase (permanent storage, needed on Vercel)
+Without it the app uses local SQLite + folders (fine on your PC; wiped on Vercel). To use Supabase set `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the `service_role` key, server-only) in `.env` / Vercel env vars, then in Supabase:
+1. SQL Editor → run: `create table if not exists products (id bigint generated always as identity primary key, name text not null, price numeric not null, category text not null, gender text not null, image text not null, created_at timestamptz default now()); grant all on table products to service_role;`
+2. Storage → new **public** bucket named `product-images`.
+Code: `backend/db.py` (table via REST) and `backend/storage.py` (images). Try-on results stay temporary in `/tmp`.
+
 ## Admin panel
 - **Add Product:** image, name, price, category, gender. Background is removed automatically if `rembg` is installed
   (first use downloads a ~170 MB model). Without it you get a warning to use clean front-view photos on a plain background.

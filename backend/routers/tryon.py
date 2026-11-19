@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-from .. import config, db, images
+from .. import config, db, images, storage
 from ..images import BadInput, save_upload
 from ..tryon import pipeline
 from ..tryon.base import TryOnError
@@ -54,7 +54,9 @@ def tryon(
             product = db.get_product(product_id)
             if not product:
                 raise BadInput("That product no longer exists. Please pick another one.")
-            garment_path = config.PRODUCTS_DIR / product["image"]   # stored image, not a temp file
+            garment_path, is_temp = storage.fetch_local(product["image"])  # local file, or a temp download from Supabase
+            if is_temp:
+                temp_files.append(garment_path)
             garment_desc = f"{product['name']} ({product['category']})"
         elif garment_image is not None and garment_image.filename:
             garment_path = save_upload(garment_image, "clothing", config.UPLOADS_DIR)

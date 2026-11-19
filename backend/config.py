@@ -24,6 +24,11 @@ DB_PATH = DATA_DIR / "store.db"
 TRYON_PROVIDER = os.getenv("TRYON_PROVIDER", "huggingface").lower()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or None
 
+# --- Supabase (permanent product storage; required on Vercel). Leave unset to use local SQLite + folders. ---
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
+
 # --- Try-on image quality ---
 # Enlarge the garment mask (needs a 2nd Space call per try-on = 2x GPU quota). Set false to save quota.
 EXPAND_MASK = os.getenv("TRYON_EXPAND_MASK", "true").strip().lower() not in ("0", "false", "no")
