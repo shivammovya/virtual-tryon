@@ -11,9 +11,11 @@ from .tryon.base import TryOnProvider
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-UPLOADS_DIR = BASE_DIR / "uploads"            # temp inputs (deleted after use)
-OUTPUTS_DIR = BASE_DIR / "outputs"            # try-on results (deleted after 1 hour)
-DATA_DIR = BASE_DIR / "data"                  # database file
+# On Vercel the project folder is read-only; only /tmp is writable (and it is NOT persistent).
+WRITE_DIR = Path("/tmp") if os.getenv("VERCEL") else BASE_DIR
+UPLOADS_DIR = WRITE_DIR / "uploads"           # temp inputs (deleted after use)
+OUTPUTS_DIR = WRITE_DIR / "outputs"           # try-on results (deleted after 1 hour)
+DATA_DIR = WRITE_DIR / "data"                 # database file
 PRODUCTS_DIR = DATA_DIR / "products"          # product (clothing) images
 FRONTEND_DIR = BASE_DIR / "frontend"
 DB_PATH = DATA_DIR / "store.db"
