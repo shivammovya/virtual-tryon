@@ -33,10 +33,21 @@ async def bad_input_handler(request: Request, exc: BadInput):
 
 
 @app.get("/api/storage-mode")
-def storage_mode():
-    """Shows which storage the running app uses (never the keys). Handy to debug deployments."""
-    return {"storage": "supabase" if config.USE_SUPABASE else "local",
+def storage_mode(test: bool = False):
+    """Shows which storage the running app uses (never the keys). Add ?test=1 to ping Supabase."""
+    info = {"storage": "supabase" if config.USE_SUPABASE else "local",
             "supabase_url_set": bool(config.SUPABASE_URL), "supabase_key_set": bool(config.SUPABASE_KEY)}
+    if test and config.USE_SUPABASE:
+        import httpx
+        h = {"apikey": config.SUPABASE_KEY, "Authorization": f"Bearer {config.SUPABASE_KEY}"}
+        for name, url in (("database", f"{config.SUPABASE_URL}/rest/v1/products?select=id&limit=1"),
+                          ("storage_bucket", f"{config.SUPABASE_URL}/storage/v1/bucket/product-images")):
+            try:
+                r = httpx.get(url, headers=h, timeout=15)
+                info[name] = "ok" if r.status_code == 200 else f"failed ({r.status_code}): {r.text[:150]}"
+            except Exception as e:
+                info[name] = f"failed: {type(e).__name__}"
+    return info
 
 
 @app.get("/")
