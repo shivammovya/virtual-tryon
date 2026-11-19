@@ -1,2 +1,2 @@
-﻿# Optional: automatic background removal for product images (downloads a ~170 MB model on first use)
+# Optional: automatic background removal for product images (downloads a ~170 MB model on first use)
 rembg[cpu]==2.0.87
