@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  header { background:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 12px rgba(0,0,0,.05); }
+  header h1 { font-size:1.2rem; margin:0; }
+  main { max-width:1000px; margin:0 auto; padding:20px 16px 48px; display:grid; gap:20px; }
+  .form-grid { display:grid; grid-template-columns:200px 1fr; gap:20px; }
+  .form-grid .drop { aspect-ratio:1; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--border); font-size:.9rem; vertical-align:middle; }
+  td img { width:56px; height:56px; object-fit:contain; background:#fafafa; border-radius:8px; }
+  td.btns { white-space:nowrap; }
+  .table-wrap { overflow-x:auto; }
+  dialog { border:0; border-radius:14px; padding:20px; width:min(440px,92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  pre { background:#f0f1f7; padding:10px; border-radius:8px; overflow-x:auto; font-size:.8rem; }
+  @media (max-width:640px) { .form-grid, .two { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header><h1>🛍️ Store Admin</h1><button class="secondary small" id="logout">Logout</button></header>
+
+<main>
+  <!-- Add product -->
+  <section class="card">
+    <h2>Add Product</h2>
+    <form id="add-form">
+      <div class="form-grid">
+        <label class="drop" id="drop-add"><input type="file" accept="image/jpeg,image/png"><span><strong>Clothing image</strong>JPG/PNG, max 10 MB</span></label>
+        <div>
+          <label class="field" style="margin-top:0">Name <input type="text" id="a-name" maxlength="100" required></label>
+          <div class="two">
+            <label class="field">Price (₹) <input type="number" id="a-price" min="0" step="0.01" required></label>
+            <label class="field">Gender <select id="a-gender"><option>men</option><option>women</option><option>unisex</option></select></label>
+          </div>
+          <label class="field">Category <input type="text" id="a-category" list="cats" placeholder="shirt, t-shirt, kurta, dress..." required></label>
+          <datalist id="cats"><option>shirt</option><option>t-shirt</option><option>kurta</option><option>dress</option><option>jacket</option><option>hoodie</option><option>top</option></datalist>
+          <label class="consent" style="margin-top:12px;display:flex;gap:8px"><input type="checkbox" id="a-removebg" checked> Remove background automatically</label>
+          <p class="muted">Use a clean front-view photo on a plain background for the best try-on results.</p>
+        </div>
+      </div>
+      <button class="primary" style="margin-top:14px" id="a-go" type="submit">Add Product</button>
+      <div id="a-msg" hidden></div>
+    </form>
+  </section>
+
+  <!-- Bulk upload -->
+  <section class="card">
+    <details>
+      <summary>Bulk upload (CSV + images) — optional</summary>
+      <p class="muted">CSV columns: <code>name,price,category,gender,image</code>. The <code>image</code> value must match one of the image file names you select.</p>
+      <pre>name,price,category,gender,image
+Blue Oxford Shirt,1299,shirt,men,blue-shirt.jpg
+Floral Dress,1899,dress,women,floral.png</pre>
+      <form id="bulk-form">
+        <label class="field">CSV file <input type="file" id="b-csv" accept=".csv" required></label>
+        <label class="field">Images (select several) <input type="file" id="b-images" accept="image/jpeg,image/png" multiple required></label>
+        <label class="consent" style="margin-top:10px;display:flex;gap:8px"><input type="checkbox" id="b-removebg" checked> Remove backgrounds</label>
+        <button class="primary" style="margin-top:12px" id="b-go" type="submit">Upload</button>
+        <div id="b-msg" hidden></div>
+      </form>
+    </details>
+  </section>
+
+  <!-- Product list -->
+  <section class="card">
+    <h2>Products (<span id="count">0</span>)</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Name</th><th>Price</th><th>Category</th><th>Gender</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <p class="muted" id="empty" hidden>No products yet. Add your first one above.</p>
+  </section>
+</main>
+
+<!-- Edit dialog -->
+<dialog id="edit-dialog">
+  <form id="edit-form">
+    <h2>Edit Product</h2>
+    <label class="field">Name <input type="text" id="e-name" maxlength="100" required></label>
+    <div class="two">
+      <label class="field">Price (₹) <input type="number" id="e-price" min="0" step="0.01" required></label>
+      <label class="field">Gender <select id="e-gender"><option>men</option><option>women</option><option>unisex</option></select></label>
+    </div>
+    <label class="field">Category <input type="text" id="e-category" list="cats" required></label>
+    <label class="field">Replace image (optional) <input type="file" id="e-image" accept="image/jpeg,image/png"></label>
+    <div class="actions" style="justify-content:flex-end">
+      <button type="button" class="secondary" id="e-cancel">Cancel</button>
+      <button type="submit" class="primary" id="e-go">Save</button>
+    </div>
+    <div class="error" id="e-error" hidden></div>
+  </form>
+</dialog>
+
+<script src="/static/common.js"></script>
+<script>
+let products = [];
+
+// Any API call that comes back 401 means the session expired -> back to login
+async function adminApi(url, options) {
+  try { return await api(url, options); }
+  catch (e) { if (e.status === 401) location.href = "/admin/login"; throw e; }
+}
+function msg(id, text, kind) { const el = $(id); el.textContent = text; el.className = kind; el.hidden = !text; }
+
+$("logout").addEventListener("click", async () => {
+  await api("/api/admin/logout", { method: "POST" }).catch(() => {});
+  location.href = "/admin/login";
+});
+
+// ---------- List ----------
+async function load() {
+  products = (await api("/api/products")).products;
+  $("count").textContent = products.length;
+  $("empty").hidden = products.length > 0;
+  $("rows").innerHTML = products.map(p => `
+    <tr><td><img src="${p.image_url}" alt=""></td><td>${escapeHtml(p.name)}</td><td>₹${p.price.toFixed(2)}</td>
+    <td>${escapeHtml(p.category)}</td><td>${p.gender}</td>
+    <td class="btns"><button class="secondary small" data-edit="${p.id}">Edit</button>
+      <button class="danger small" data-del="${p.id}">Delete</button></td></tr>`).join("");
+}
+$("rows").addEventListener("click", async ev => {
+  const del = ev.target.dataset.del, edit = ev.target.dataset.edit;
+  if (del) {
+    const p = products.find(x => x.id == del);
+    if (!confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
+    try { await adminApi("/api/products/" + del, { method: "DELETE" }); await load(); }
+    catch (e) { alert(e.message); }
+  }
+  if (edit) openEdit(products.find(x => x.id == edit));
+});
+
+// ---------- Add ----------
+const addDrop = setupDrop($("drop-add"));
+$("add-form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  if (!addDrop.file) return msg("a-msg", "Please choose a clothing image.", "error");
+  const fd = new FormData();
+  fd.append("image", addDrop.file);
+  fd.append("name", $("a-name").value); fd.append("price", $("a-price").value);
+  fd.append("category", $("a-category").value); fd.append("gender", $("a-gender").value);
+  fd.append("remove_bg", $("a-removebg").checked);
+  $("a-go").disabled = true; msg("a-msg", "Uploading (background removal can take a few seconds)...", "muted");
+  try {
+    const data = await adminApi("/api/products", { method: "POST", body: fd });
+    if (data.warning) msg("a-msg", "Added. " + data.warning, "warn"); else msg("a-msg", "Product added.", "ok");
+    $("add-form").reset(); addDrop.clear();
+    await load();
+  } catch (e) { msg("a-msg", e.message, "error"); }
+  finally { $("a-go").disabled = false; }
+});
+
+// ---------- Edit ----------
+let editingId = null;
+function openEdit(p) {
+  editingId = p.id;
+  $("e-name").value = p.name; $("e-price").value = p.price; $("e-category").value = p.category;
+  $("e-gender").value = p.gender; $("e-image").value = ""; $("e-error").hidden = true;
+  $("edit-dialog").showModal();
+}
+$("e-cancel").addEventListener("click", () => $("edit-dialog").close());
+$("edit-form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const fd = new FormData();
+  fd.append("name", $("e-name").value); fd.append("price", $("e-price").value);
+  fd.append("category", $("e-category").value); fd.append("gender", $("e-gender").value);
+  fd.append("remove_bg", true);
+  if ($("e-image").files[0]) fd.append("image", $("e-image").files[0]);
+  $("e-go").disabled = true;
+  try {
+    await adminApi("/api/products/" + editingId, { method: "PUT", body: fd });
+    $("edit-dialog").close(); await load();
+  } catch (e) { $("e-error").textContent = e.message; $("e-error").hidden = false; }
+  finally { $("e-go").disabled = false; }
+});
+
+// ---------- Bulk ----------
+$("bulk-form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const fd = new FormData();
+  fd.append("csv_file", $("b-csv").files[0]);
+  for (const f of $("b-images").files) fd.append("images", f);
+  fd.append("remove_bg", $("b-removebg").checked);
+  $("b-go").disabled = true; msg("b-msg", "Uploading...", "muted");
+  try {
+    const d = await adminApi("/api/products/bulk/upload", { method: "POST", body: fd });
+    const text = `Added ${d.added} product(s).` + (d.errors.length ? "\n" + d.errors.join("\n") : "");
+    msg("b-msg", text, d.errors.length ? "warn" : "ok");
+    $("b-msg").style.whiteSpace = "pre-line";
+    await load();
+  } catch (e) { msg("b-msg", e.message, "error"); }
+  finally { $("b-go").disabled = false; }
+});
+
+load();
+</script>
+</body>
+</html>

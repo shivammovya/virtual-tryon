@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HEDONFIT</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .wide-btn { width:100%; margin-top:8px; }
+  .cam-modal { position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.85); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:12px; }
+  .cam-modal video { width:100%; max-width:420px; max-height:70vh; border-radius:12px; background:#000; transform:scaleX(-1); object-fit:cover; }
+  .cam-modal p { color:#fff; margin:0; font-size:.9rem; text-align:center; }
+  .cam-actions { display:flex; gap:10px; }
+  .pose-title { margin-top:8px; }
+  .pose-title strong { color:var(--text); }
+  .pose-help { font-size:.76rem; color:var(--muted); margin:2px 0 0; line-height:1.35; }
+  .pose-guide { display:flex; gap:10px; margin:8px 0 0; }
+  .pose-card { flex:1; margin:0; padding:6px 4px; border-radius:12px; border:2px solid; text-align:center; color:#6b7280; }
+  .pose-card svg { height:100px; width:auto; max-width:100%; display:block; margin:0 auto; }
+  .pose-card figcaption { font-size:.78rem; font-weight:600; margin-top:2px; }
+  .pose-card.ok { border-color:#16a34a; background:#ecfdf3; }
+  .pose-card.ok figcaption { color:#15803d; }
+  .pose-card.bad { border-color:#dc2626; background:#fef2f2; }
+  .pose-card.bad figcaption { color:#b91c1c; }
+  @media (max-width:480px) { .pose-guide { gap:6px; } .pose-card svg { height:80px; } }
+  @media (prefers-color-scheme: dark) {
+    .pose-card { color:#9ca3af; }
+    .pose-card.ok { background:rgba(22,163,74,.15); border-color:#22c55e; }
+    .pose-card.ok figcaption { color:#4ade80; }
+    .pose-card.bad { background:rgba(220,38,38,.15); border-color:#f87171; }
+    .pose-card.bad figcaption { color:#f87171; }
+  }
+  .layout { display:flex; min-height:100vh; }
+  .sidebar { width:230px; background:#fff; padding:24px 14px; box-shadow:2px 0 12px rgba(0,0,0,.05); flex-shrink:0; }
+  .sidebar h1 { font-size:1.3rem; padding:0 8px 14px; }
+  .tab { display:block; width:100%; text-align:left; background:none; color:var(--text); margin-bottom:6px; }
+  .tab.active { background:var(--accent-soft); color:var(--accent); }
+  .content { flex:1; padding:24px 20px 48px; max-width:900px; }
+  .pane h2 { margin-bottom:14px; }
+  .one-up { max-width:320px; margin:0 auto; }
+  .two-up { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .filters select { width:auto; margin:0; min-width:150px; }
+  /* ---------- Coverflow carousel ---------- */
+  /* --w card width, --step distance between neighbouring card centres, --flat-step spacing when only 1-2 products */
+  .cf-stage { --w:210px; --step:150px; --flat-step:230px; position:relative; height:420px; overflow:hidden;
+              user-select:none; -webkit-user-select:none; touch-action:pan-y; }
+  .cf { position:absolute; left:50%; top:50%; width:var(--w); padding:0; text-align:center; cursor:pointer;
+        background:#fff; color:var(--text); border:2px solid var(--border); border-radius:14px; overflow:hidden;
+        /* --d = slot offset from centre, --s = scale, --lift = hover lift (all set from JS) */
+        transform:translate(calc(-50% + var(--d,0) * var(--stepx,var(--step))), calc(-50% + var(--lift,0px))) scale(var(--s,1));
+        transition:transform .4s ease-out, opacity .4s ease-out, box-shadow .4s ease-out;
+        box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .cf.active { box-shadow:0 16px 32px rgba(31,36,48,.25); }
+  .cf.selected { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft), 0 16px 32px rgba(31,36,48,.25); }
+  .cf-stage.z-mid .cf.active { --lift:-8px; }               /* middle zone: lift the centre card */
+  .cf-img { display:block; background:#fff; aspect-ratio:1/1.15; }
+  .cf-img img { width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
+  .cf-body { display:block; padding:10px 12px 14px; border-top:1px solid #f0f0f5; }
+  .cf-badge { display:inline-block; font-size:.68rem; letter-spacing:.06em; font-weight:700; color:#fff; padding:2px 9px; border-radius:999px; margin-bottom:6px; }
+  .b-tuxedo { background:#111; } .b-blazer { background:#2f5fd0; } .b-suit { background:#7a4b27; } .b-other { background:#6b7280; }
+  .cf-name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:.92rem; line-height:1.25; min-height:2.5em; }
+  .cf-price { display:block; color:var(--muted); margin-top:4px; font-weight:600; }
+  .cf-arrow { position:absolute; top:50%; transform:translateY(-50%); z-index:50; width:44px; height:64px; padding:0;
+              background:rgba(255,255,255,.75); color:var(--accent); font-size:2rem; line-height:1; opacity:0; transition:opacity .2s; }
+  .cf-arrow.prev { left:4px; } .cf-arrow.next { right:4px; }
+  .cf-stage.z-left .prev, .cf-stage.z-right .next { opacity:.7; }   /* faint hint while that side is hovered */
+  .cf-stage.flat .cf-arrow { display:none; }
+  .cf-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; margin:0; }
+  .selbar { margin:10px 0 0; padding:10px 14px; border-radius:10px; background:#f3f4f9; color:var(--muted); text-align:center; }
+  .selbar.has { background:var(--accent-soft); color:var(--text); }
+  @media (hover:none) { .cf-arrow { display:none; } }              /* touch devices: swipe instead */
+  @media (max-width: 900px) { .cf-stage { --w:200px; --step:150px; --flat-step:220px; } }   /* tablet: 3 cards */
+  @media (max-width: 700px) { .cf-stage { --w:210px; --step:170px; --flat-step:150px; height:430px; } }  /* mobile: 1 + peek */
+  details { margin-top:14px; border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  summary { cursor:pointer; font-weight:600; font-size:.9rem; }
+  .row { margin-top:10px; font-size:.9rem; }
+  .consent { margin-top:14px; font-size:.9rem; display:flex; gap:8px; align-items:flex-start; }
+
+  /* Mobile: sidebar becomes tabs across the top */
+  @media (max-width: 700px) {
+    .layout { flex-direction:column; }
+    .sidebar { width:100%; padding:10px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; box-shadow:0 2px 12px rgba(0,0,0,.05); }
+    .sidebar h1 { width:100%; padding:0 4px 4px; }
+    .tab { flex:1; text-align:center; margin:0; }
+    .content { padding:16px 12px 40px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar">
+    <h1>HEDONFIT</h1>
+    <button class="tab active" type="button">Store Collection</button>
+  </nav>
+
+  <main class="content">
+    <!-- ================= TAB 2: Store Collection ================= -->
+    <section class="pane card" id="pane-store">
+      <h2>Store Collection</h2>
+      <form id="form-store">
+        <div class="filters">
+          <select id="f-category"><option value="">All categories</option></select>
+          <select id="f-gender">
+            <option value="men">Men</option><option value="women">Women</option></select>
+        </div>
+        <div class="cf-stage" id="stage" aria-label="Product carousel">
+          <button type="button" class="cf-arrow prev" data-dir="-1" aria-label="Previous product">‹</button>
+          <button type="button" class="cf-arrow next" data-dir="1" aria-label="Next product">›</button>
+          <p class="muted cf-empty" id="cf-empty" hidden>No products found.</p>
+        </div>
+        <p class="selbar" id="selected-name">No product selected.</p>
+
+        <div class="one-up" style="margin-top:14px">
+          <label class="drop" id="drop-s-person"><input type="file" accept="image/jpeg,image/png"><span><strong>Your Photo</strong>Click or drop (JPG/PNG)</span></label>
+          <button type="button" class="secondary wide-btn" id="cam-open">📷 Take a photo with camera</button>
+          <p class="tips pose-title"><strong>Front-facing, well-lit upper or full-body photo.</strong></p>
+          <p class="pose-help">Stand straight with your arms relaxed at your sides. Please don't fold your arms or cross your hands in front of your body.</p>
+          <div class="pose-guide">
+            <figure class="pose-card ok" role="img" aria-label="Correct: standing straight with arms relaxed at sides">
+              <svg viewBox="0 0 60 100" height="100" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="30" cy="12" r="8"/>
+                <path d="M30 20V58M30 58L22 94M30 58L38 94"/>
+                <path d="M30 28L14 54M30 28L46 54"/>
+              </svg>
+              <figcaption>✓ Correct</figcaption>
+            </figure>
+            <figure class="pose-card bad" role="img" aria-label="Avoid: arms folded across chest">
+              <svg viewBox="0 0 60 100" height="100" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="30" cy="12" r="8"/>
+                <path d="M30 20V58M30 58L22 94M30 58L38 94"/>
+                <path d="M30 28L16 40L40 44M30 28L44 40L20 44"/>
+              </svg>
+              <figcaption>✗ Avoid</figcaption>
+            </figure>
+          </div>
+        </div>
+        <label class="consent"><input type="checkbox" id="s-consent">
+          <span>I confirm this is my photo or I have permission from the person in it.</span></label>
+        <button class="primary wide" id="s-go" type="submit">Try It On</button>
+        <div class="loading" id="s-loading" hidden><div class="spinner"></div>Generating... free model may take 30–120 seconds</div>
+        <div class="error" id="s-error" hidden></div>
+      </form>
+      <div class="result" id="s-result" hidden>
+        <img id="s-img" alt="Try-on result">
+        <div class="actions"><a class="btn" id="s-dl" download="tryon.png">Download</a>
+          <button class="secondary" id="s-again" type="button">Try Another</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="/static/common.js"></script>
+<script>
+// ---------- Shared: send a try-on request and manage the UI ----------
+// prefix "s" = store collection
+async function runTryOn(prefix, formData) {
+  const err = $(prefix + "-error");
+  err.hidden = true;
+  $(prefix + "-go").disabled = true;
+  $(prefix + "-loading").hidden = false;
+  try {
+    const data = await api("/api/tryon", { method: "POST", body: formData });
+    $(prefix + "-img").src = data.image_url;
+    $(prefix + "-dl").href = data.image_url;
+    $("form-store").hidden = true;
+    $(prefix + "-result").hidden = false;
+  } catch (e) {
+    err.textContent = e.message; err.hidden = false;
+  } finally {
+    $(prefix + "-go").disabled = false;
+    $(prefix + "-loading").hidden = true;
+  }
+}
+function showErr(prefix, msg) { $(prefix + "-error").textContent = msg; $(prefix + "-error").hidden = false; }
+
+// ---------- Store Collection ----------
+let products = [], shown = [], selectedId = null, active = 0, prevActive = 0;
+const sPerson = setupDrop($("drop-s-person"));
+
+// ---------- Camera capture (feeds the same file input as the upload box) ----------
+(() => {
+  const openBtn = $("cam-open");
+  let stream = null, modal = null;
+  const stop = () => { stream?.getTracks().forEach(t => t.stop()); stream = null; modal?.remove(); modal = null; };
+  openBtn.addEventListener("click", async () => {
+    if (!navigator.mediaDevices?.getUserMedia)
+      return alert("Camera isn't available here. It needs https:// or localhost; you can still upload a photo.");
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1080 }, height: { ideal: 1440 } }, audio: false });
+    } catch { return alert("Couldn't access the camera. Please allow camera permission, or upload a photo instead."); }
+    modal = document.createElement("div");
+    modal.className = "cam-modal";
+    modal.innerHTML = '<p>Stand back so your upper body (or full body) is visible, arms relaxed at your sides.</p>' +
+      '<video autoplay playsinline muted aria-label="Camera preview"></video>' +
+      '<div class="cam-actions"><button type="button" class="primary" id="cam-snap">Capture</button>' +
+      '<button type="button" class="secondary" id="cam-cancel">Cancel</button></div>';
+    document.body.appendChild(modal);
+    const video = modal.querySelector("video");
+    video.srcObject = stream;
+    modal.querySelector("#cam-cancel").onclick = stop;
+    modal.querySelector("#cam-snap").onclick = () => {
+      if (!video.videoWidth) return;
+      const c = document.createElement("canvas");
+      c.width = video.videoWidth; c.height = video.videoHeight;
+      c.getContext("2d").drawImage(video, 0, 0);   // un-mirrored, true orientation
+      c.toBlob(blob => {
+        stop();
+        if (!blob) return;
+        const dt = new DataTransfer();
+        dt.items.add(new File([blob], "camera.jpg", { type: "image/jpeg" }));
+        const input = $("drop-s-person").querySelector("input");
+        input.files = dt.files;
+        input.dispatchEvent(new Event("change"));  // existing upload logic takes over
+      }, "image/jpeg", 0.92);
+    };
+  });
+})();
+const stage = $("stage");
+const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });   // 18000 -> 18,000
+const mqTablet = matchMedia("(max-width: 900px)"), mqMobile = matchMedia("(max-width: 700px)");
+const canHover = matchMedia("(hover: hover)").matches;
+const radius = () => (mqTablet.matches ? 1 : 2);        // cards visible on each side of the centre
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const mod = (a, n) => ((a % n) + n) % n;
+const badgeClass = c => ({ tuxedo: "b-tuxedo", blazer: "b-blazer", suit: "b-suit" }[c] || "b-other");
+
+async function loadProducts() {
+  try { products = (await api("/api/products")).products; }
+  catch (e) { return showErr("s", "Could not load products: " + e.message); }
+  // Category filter is built from what the store actually has (keeps the current choice)
+  const cur = $("f-category").value;
+  const cats = [...new Set(products.map(p => p.category))].sort();
+  $("f-category").innerHTML = '<option value="">All categories</option>' +
+    cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(cap(c))}</option>`).join("");
+  $("f-category").value = cats.includes(cur) ? cur : "";
+  applyFilters(true);
+}
+
+// Re-filter the list. keepPosition=true (reload) tries to keep the same product in the centre;
+// false (dropdown changed) resets to the first matching product.
+function applyFilters(keepPosition) {
+  const keepId = keepPosition ? shown[active]?.id : null;
+  const cat = $("f-category").value, gender = $("f-gender").value;
+  shown = products.filter(p => (!cat || p.category === cat) && (p.gender === gender || p.gender === "unisex"));
+  active = Math.max(0, shown.findIndex(p => p.id === keepId));
+  if (!shown.some(p => p.id === selectedId)) selectedId = null;   // selected item filtered out / deleted
+  build();
+  layout();
+  updateDetails();
+}
+
+// Create one card per product (only when the list changes)
+function build() {
+  stage.querySelectorAll(".cf").forEach(n => n.remove());
+  $("cf-empty").hidden = shown.length > 0;
+  shown.forEach((p, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "cf"; b.dataset.i = i;
+    b.innerHTML = `<span class="cf-img"><img src="${p.image_url}" alt="${escapeHtml(p.name)}" draggable="false"></span>
+      <span class="cf-body"><span class="cf-badge ${badgeClass(p.category)}">${escapeHtml(p.category.toUpperCase())}</span>
+      <b class="cf-name">${escapeHtml(p.name)}</b><span class="cf-price">₹${inr.format(p.price)}</span></span>`;
+    stage.appendChild(b);
+  });
+  prevActive = active;
+}
+
+// Slot of card i relative to the centre, looping around the list: ... -2 -1 0 1 2 ...
+function offsetOf(i) {
+  const n = shown.length, lo = Math.floor(n / 2);
+  return mod(i - active + lo, n) - lo;
+}
+
+// Position every card (scale / opacity / z-index) - CSS animates the change (transform + opacity, 400ms)
+function layout() {
+  const n = shown.length, R = radius(), flat = n <= 2;         // 1-2 products: centred, no loop, no placeholders
+  const moved = n ? mod(active - prevActive + Math.floor(n / 2), n) - Math.floor(n / 2) : 0;
+  stage.classList.toggle("flat", flat);
+  stage.querySelectorAll(".cf").forEach(el => {
+    const i = Number(el.dataset.i), p = shown[i];
+    const d = flat ? i - (n - 1) / 2 : offsetOf(i), ad = Math.abs(d);
+    // A card that jumps from one end of the loop to the other should not fly across the row
+    const wrapped = !flat && el._d !== undefined && d !== el._d - moved;
+    const visible = flat || ad <= R;
+    const scale = flat ? (mqMobile.matches ? 0.75 : 1) : [1, 0.8, 0.65][Math.min(ad, 2)];
+    const opacity = !visible ? 0 : flat ? 1 : [1, 0.85, 0.6][Math.min(ad, 2)];
+    el.style.setProperty("--d", flat ? d : Math.max(-(R + 1), Math.min(R + 1, d)));
+    el.style.setProperty("--s", scale);
+    el.style.setProperty("--stepx", flat ? "var(--flat-step)" : "var(--step)");
+    el.style.opacity = opacity;
+    el.style.zIndex = !visible ? 0 : flat ? (i === active ? 10 : 5) : 10 - ad;
+    el.style.pointerEvents = visible ? "auto" : "none";
+    el.style.transition = wrapped ? "opacity .4s ease-out" : "";
+    el.tabIndex = visible ? 0 : -1;
+    el.setAttribute("aria-hidden", !visible);
+    el.classList.toggle("active", flat ? i === active : d === 0);
+    el.classList.toggle("selected", p.id === selectedId);
+    el._d = d;
+  });
+  prevActive = active;
+}
+
+function updateDetails() {
+  const p = products.find(x => x.id === selectedId);
+  $("selected-name").innerHTML = p
+    ? `<b>${escapeHtml(p.name)}</b> · ${escapeHtml(cap(p.category))} · ₹${inr.format(p.price)}`
+    : "No product selected.";
+  $("selected-name").classList.toggle("has", !!p);
+}
+
+// Slide the carousel one product (dir -1 = previous, +1 = next), looping at the ends
+function step(dir) {
+  if (shown.length <= 2) return;
+  active = mod(active + dir, shown.length);
+  layout();
+}
+
+// ----- Click: arrows, side cards (slide to centre), centre card (select) -----
+stage.addEventListener("click", ev => {
+  const arrow = ev.target.closest(".cf-arrow");
+  if (arrow) return step(Number(arrow.dataset.dir));
+  const card = ev.target.closest(".cf");
+  if (!card) return;
+  const i = Number(card.dataset.i);
+  if (shown.length <= 2 || i === active) selectedId = shown[i].id;   // centre card: select it
+  active = i;                                                        // side card: slide to centre first
+  layout();
+  updateDetails();
+});
+
+// ----- Hover zones (mouse only): left 30% / middle 40% / right 30% -----
+let zone = null, timer = null;
+function setZone(z) {
+  if (z === zone) return;
+  zone = z;
+  clearTimeout(timer);
+  stage.classList.toggle("z-left", z === "left");
+  stage.classList.toggle("z-right", z === "right");
+  stage.classList.toggle("z-mid", z === "mid");
+  if (z === "left" || z === "right") {
+    const dir = z === "left" ? -1 : 1;
+    const tick = () => { step(dir); timer = setTimeout(tick, 700); };   // keep sliding while hovered
+    timer = setTimeout(tick, 350);
+  }
+}
+if (canHover) {
+  stage.addEventListener("mousemove", ev => {
+    if (shown.length <= 2) return setZone(null);
+    const r = stage.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width;
+    setZone(x < 0.3 ? "left" : x > 0.7 ? "right" : "mid");
+  });
+  stage.addEventListener("mouseleave", () => setZone(null));
+}
+
+// ----- Keyboard ← → (not while typing / using a dropdown) -----
+document.addEventListener("keydown", ev => {
+  if ($("pane-store").hidden || (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight")) return;
+  if (ev.target.closest("input, select, textarea")) return;
+  ev.preventDefault();
+  step(ev.key === "ArrowLeft" ? -1 : 1);
+});
+
+// ----- Swipe on touch screens -----
+let touchX = null;
+stage.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
+stage.addEventListener("touchend", e => {
+  if (touchX === null) return;
+  const dx = e.changedTouches[0].clientX - touchX;
+  touchX = null;
+  if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);        // swipe left = next product
+});
+
+[mqTablet, mqMobile].forEach(m => m.addEventListener("change", layout));   // 5 / 3 / 1 cards
+$("f-category").addEventListener("change", () => applyFilters(false));
+$("f-gender").addEventListener("change", () => applyFilters(false));
+
+$("form-store").addEventListener("submit", ev => {
+  ev.preventDefault();
+  if (!selectedId) return showErr("s", "Please select a product first.");
+  if (!sPerson.file) return showErr("s", "Please upload your photo.");
+  if (!$("s-consent").checked) return showErr("s", "Please confirm the photo consent.");
+  const fd = new FormData();
+  fd.append("person_image", sPerson.file);
+  fd.append("product_id", selectedId);
+  runTryOn("s", fd);
+});
+$("s-again").addEventListener("click", () => { $("s-result").hidden = true; $("form-store").hidden = false; });
+loadProducts();   // fresh from the server on every page load, so admin changes show up
+</script>
+</body>
+</html>

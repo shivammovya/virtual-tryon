@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Login</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px; }
+  .card { width:100%; max-width:380px; }
+</style>
+</head>
+<body>
+<form class="card" id="form">
+  <h2>Store Owner Login</h2>
+  <label class="field">Email <input type="email" id="email" required autocomplete="username"></label>
+  <label class="field">Password <input type="password" id="password" required autocomplete="current-password"></label>
+  <button class="primary wide" id="go" type="submit">Log in</button>
+  <div class="error" id="error" hidden></div>
+</form>
+<script src="/static/common.js"></script>
+<script>
+$("form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  $("error").hidden = true; $("go").disabled = true;
+  try {
+    await api("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("email").value, password: $("password").value }) });
+    location.href = "/admin";
+  } catch (e) { $("error").textContent = e.message; $("error").hidden = false; }
+  finally { $("go").disabled = false; }
+});
+</script>
+</body>
+</html>

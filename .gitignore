@@ -1,0 +1,28 @@
+﻿# Secrets
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# App data
+uploads/
+outputs/
+data/
+
+# Model weights (often over GitHub's 100 MB limit)
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.onnx
+
+# Misc
+*.log
+.DS_Store
+.vscode/
+.idea/
+node_modules/
