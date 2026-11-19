@@ -209,12 +209,20 @@ const sPerson = setupDrop($("drop-s-person"));
     }).catch(() => {});
     flipBtn.onclick = async () => {
       const next = facing === "user" ? "environment" : "user";
-      try {
-        const s = await getStream(next);
-        stream.getTracks().forEach(t => t.stop());
-        stream = s; facing = next; video.srcObject = s;
-        video.style.transform = facing === "user" ? "scaleX(-1)" : "none";
-      } catch { alert("Couldn't switch the camera."); }
+      flipBtn.disabled = true;
+      // Phones can't open two cameras at once: release the current one BEFORE requesting the other.
+      stream.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+      const use = async f => {
+        stream = await getStream(f); facing = f; video.srcObject = stream;
+        video.style.transform = f === "user" ? "scaleX(-1)" : "none";
+      };
+      try { await use(next); }
+      catch (e) {
+        console.warn("Camera switch failed:", e.name, e.message);
+        try { await use(facing); } catch {}               // go back to the previous camera
+        alert("Couldn't switch the camera" + (e.name ? " (" + e.name + ")" : "") + ".");
+      } finally { flipBtn.disabled = false; }
     };
     modal.querySelector("#cam-snap").onclick = () => {
       if (!video.videoWidth) return;
